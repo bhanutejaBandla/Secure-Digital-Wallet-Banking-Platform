@@ -5,6 +5,7 @@ import com.walletbank.wallet.dto.UserResponse;
 import com.walletbank.wallet.entity.Role;
 import com.walletbank.wallet.entity.User;
 import com.walletbank.wallet.exception.EmailAlreadyExistsException;
+import com.walletbank.wallet.exception.ResourceNotFoundException;
 import com.walletbank.wallet.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,17 +20,24 @@ public class UserService {
 
     public UserResponse register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase();
+
         if (userRepository.existsByEmail(email)) {
-            throw new EmailAlreadyExistsException("Email already exists");
+            throw new EmailAlreadyExistsException("Email already registered: " + email);
         }
 
         User user = User.builder()
-                .fullName(request.fullName())
+                .fullName(request.fullName().trim())
                 .email(email)
                 .password(passwordEncoder.encode(request.password()))
                 .role(Role.USER)
                 .build();
 
         return UserResponse.from(userRepository.save(user));
+    }
+
+    public UserResponse getByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .map(UserResponse::from)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
     }
 }
