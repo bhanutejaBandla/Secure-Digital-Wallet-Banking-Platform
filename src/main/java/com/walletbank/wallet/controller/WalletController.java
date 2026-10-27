@@ -1,7 +1,10 @@
 package com.walletbank.wallet.controller;
 
+import com.walletbank.wallet.dto.MoneyRequest;
+import com.walletbank.wallet.dto.TransactionResponse;
 import com.walletbank.wallet.dto.WalletResponse;
 import com.walletbank.wallet.service.WalletService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,5 +28,17 @@ public class WalletController {
     @GetMapping("/me")
     public WalletResponse myWallet(@AuthenticationPrincipal UserDetails principal) {
         return walletService.getMyWallet(principal.getUsername());
+    }
+
+    @PostMapping("/deposit")
+    public TransactionResponse deposit(@AuthenticationPrincipal UserDetails principal,
+                                       @Valid @RequestBody MoneyRequest request) {
+        return walletService.deposit(principal.getUsername(), request);
+    }
+
+    @PostMapping("/withdraw")
+    public TransactionResponse withdraw(@AuthenticationPrincipal UserDetails principal,
+                                        @Valid @RequestBody MoneyRequest request) {
+        return walletService.withdraw(principal.getUsername(), request);
     }
 }
