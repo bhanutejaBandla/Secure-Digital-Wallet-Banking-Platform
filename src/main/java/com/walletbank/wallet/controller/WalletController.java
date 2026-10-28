@@ -2,6 +2,7 @@ package com.walletbank.wallet.controller;
 
 import com.walletbank.wallet.dto.MoneyRequest;
 import com.walletbank.wallet.dto.TransactionResponse;
+import com.walletbank.wallet.dto.TransferRequest;
 import com.walletbank.wallet.dto.WalletResponse;
 import com.walletbank.wallet.service.WalletService;
 import jakarta.validation.Valid;
@@ -40,5 +41,11 @@ public class WalletController {
     public TransactionResponse withdraw(@AuthenticationPrincipal UserDetails principal,
                                         @Valid @RequestBody MoneyRequest request) {
         return walletService.withdraw(principal.getUsername(), request);
+    }
+
+    @PostMapping("/transfer")
+    public TransactionResponse transfer(@AuthenticationPrincipal UserDetails principal,
+                                        @Valid @RequestBody TransferRequest request) {
+        return walletService.transfer(principal.getUsername(), request);
     }
 }

@@ -2,6 +2,7 @@ package com.walletbank.wallet.service;
 
 import com.walletbank.wallet.dto.MoneyRequest;
 import com.walletbank.wallet.dto.TransactionResponse;
+import com.walletbank.wallet.dto.TransferRequest;
 import com.walletbank.wallet.dto.WalletResponse;
 import com.walletbank.wallet.entity.Transaction;
 import com.walletbank.wallet.entity.TransactionStatus;
@@ -9,6 +10,7 @@ import com.walletbank.wallet.entity.TransactionType;
 import com.walletbank.wallet.entity.User;
 import com.walletbank.wallet.entity.Wallet;
 import com.walletbank.wallet.exception.InsufficientBalanceException;
+import com.walletbank.wallet.exception.InvalidTransferException;
 import com.walletbank.wallet.exception.ResourceNotFoundException;
 import com.walletbank.wallet.exception.WalletAlreadyExistsException;
 import com.walletbank.wallet.repository.TransactionRepository;
@@ -98,6 +100,49 @@ public class WalletService {
         return TransactionResponse.from(tx, wallet.getBalance());
     }
 
+    @Transactional
+    public TransactionResponse transfer(String email, TransferRequest request) {
+        User user = findUser(email);
+
+        Long senderId = walletRepository.findIdByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Wallet not found. Create one first with POST /api/wallets"));
+        Long receiverId = walletRepository.findIdByAccountNumber(request.toAccountNumber())
+                .orElseThrow(() -> new ResourceNotFoundException("Recipient account not found"));
+
+        if (senderId.equals(receiverId)) {
+            throw new InvalidTransferException("Cannot transfer to your own wallet");
+        }
+
+        // Always lock in ascending id order so two opposite transfers can never deadlock.
+        Long firstId = Math.min(senderId, receiverId);
+        Long secondId = Math.max(senderId, receiverId);
+        Wallet first = lockById(firstId);
+        Wallet second = lockById(secondId);
+
+        Wallet sender = senderId.equals(firstId) ? first : second;
+        Wallet receiver = senderId.equals(firstId) ? second : first;
+
+        if (sender.getBalance().compareTo(request.amount()) < 0) {
+            throw new InsufficientBalanceException("Insufficient balance");
+        }
+
+        sender.setBalance(sender.getBalance().subtract(request.amount()));
+        receiver.setBalance(receiver.getBalance().add(request.amount()));
+
+        Transaction tx = Transaction.builder()
+                .type(TransactionType.TRANSFER)
+                .amount(request.amount())
+                .status(TransactionStatus.SUCCESS)
+                .fromWallet(sender)
+                .toWallet(receiver)
+                .description(descriptionOrDefault(request.description(), "Transfer"))
+                .build();
+        transactionRepository.save(tx);
+
+        return TransactionResponse.from(tx, sender.getBalance());
+    }
+
     private User findUser(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + email));
@@ -107,6 +152,11 @@ public class WalletService {
         return walletRepository.findByUserIdForUpdate(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Wallet not found. Create one first with POST /api/wallets"));
+    }
+
+    private Wallet lockById(Long walletId) {
+        return walletRepository.findByIdForUpdate(walletId)
+                .orElseThrow(() -> new ResourceNotFoundException("Wallet not found"));
     }
 
     private String descriptionOrDefault(String description, String fallback) {
